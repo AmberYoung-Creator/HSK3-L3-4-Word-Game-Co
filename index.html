@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HSK3 · L3 & L4 — Character Trainer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { height: 100%; }
+    /* playful but adult-friendly */
+    .bg-candy { background: radial-gradient(1200px 600px at 0% 0%, #fdf2f8 0%, transparent 60%),
+                         radial-gradient(1200px 600px at 100% 0%, #ecfeff 0%, transparent 60%),
+                         radial-gradient(1200px 900px at 50% 100%, #f0fdf4 0%, transparent 60%);}
+    .card { perspective: 1000px; }
+    .flip { transform-style: preserve-3d; transition: transform .5s; }
+    .flipped { transform: rotateY(180deg); }
+    .face { backface-visibility: hidden; }
+    .back { transform: rotateY(180deg); }
+    .pulse { animation: pulse 0.9s ease; }
+    @keyframes pulse { 0% { transform: scale(1);} 50% { transform: scale(1.03);} 100% { transform: scale(1);} }
+  </style>
+</head>
+<body class="min-h-full bg-candy text-slate-800">
+  <div id="root" class="max-w-6xl mx-auto p-4 md:p-6"></div>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+  const { useState, useEffect, useMemo, useRef } = React;
+
+  /********************
+   * DATA
+   ********************/
+  // Level group & lesson tags included for filtering.
+  const WORDS = [
+    // L3-L02/L3-L03
+    { id:"腿-3L02", hanzi:"腿", en:"leg", ru:"нога", lesson:"3-L02", group:"L3" },
+    { id:"衬衫-3L03", hanzi:"衬衫", en:"shirt", ru:"рубашка", lesson:"3-L03", group:"L3" },
+    { id:"放-3L03", hanzi:"放", en:"to put; to place", ru:"класть; ставить; помещать", lesson:"3-L03", group:"L3" },
+    { id:"还是-3L03", hanzi:"还是", en:"or; still; rather", ru:"или; всё же", lesson:"3-L03", group:"L3" },
+    { id:"花-3L03", hanzi:"花", en:"flower", ru:"цветок", lesson:"3-L03", group:"L3" },
+    { id:"或者-3L03", hanzi:"或者", en:"or; either ... or ...", ru:"или; либо", lesson:"3-L03", group:"L3" },
+    { id:"记得-3L03", hanzi:"记得", en:"to remember", ru:"помнить", lesson:"3-L03", group:"L3" },
+    { id:"裤子-3L03", hanzi:"裤子", en:"pants", ru:"штаны", lesson:"3-L03", group:"L3" },
+    { id:"绿-3L03", hanzi:"绿", en:"green", ru:"зелёный", lesson:"3-L03", group:"L3" },
+    { id:"爬山-3L03", hanzi:"爬山", en:"to climb a mountain", ru:"подниматься в горы", lesson:"3-L03", group:"L3" },
+    { id:"舒服-3L03", hanzi:"舒服", en:"comfortable", ru:"удобный; комфортный", lesson:"3-L03", group:"L3" },
+    { id:"甜-3L03", hanzi:"甜", en:"sweet", ru:"сладкий", lesson:"3-L03", group:"L3" },
+    { id:"条-3L03", hanzi:"条", en:"MW for long things, pants, etc.", ru:"счётное слово (для длинных предметов, брюк и т.п.)", lesson:"3-L03", group:"L3" },
+    { id:"小心-3L03", hanzi:"小心", en:"careful; be careful", ru:"осторожный; осторожно", lesson:"3-L03", group:"L3" },
+    { id:"新鲜-3L03", hanzi:"新鲜", en:"fresh", ru:"свежий", lesson:"3-L03", group:"L3" },
+    { id:"饮料-3L03", hanzi:"饮料", en:"drink; beverage", ru:"напиток", lesson:"3-L03", group:"L3" },
+    { id:"元-3L03", hanzi:"元", en:"yuan (unit of money)", ru:"юань (валюта)", lesson:"3-L03", group:"L3" },
+    { id:"只-3L03", hanzi:"只", en:"only; merely", ru:"только; лишь", lesson:"3-L03", group:"L3" },
+    // L4-words
+    { id:"比赛-3L04", hanzi:"比赛", en:"match; competition", ru:"соревнование; матч", lesson:"3-L04", group:"L4" },
+    { id:"超市-3L04", hanzi:"超市", en:"supermarket", ru:"супермаркет", lesson:"3-L04", group:"L4" },
+    { id:"聪明-3L04", hanzi:"聪明", en:"clever; smart", ru:"умный", lesson:"3-L04", group:"L4" },
+    { id:"蛋糕-3L04", hanzi:"蛋糕", en:"cake", ru:"торт; пирожное", lesson:"3-L04", group:"L4" },
+    { id:"饿-3L04", hanzi:"饿", en:"hungry", ru:"голодный", lesson:"3-L04", group:"L4" },
+    { id:"分-3L04", hanzi:"分", en:"fen (1/10 jiao); point", ru:"фэнь (1/10 цзяо)", lesson:"3-L04", group:"L4" },
+    { id:"回答-3L04", hanzi:"回答", en:"to answer", ru:"отвечать", lesson:"3-L04", group:"L4" },
+    { id:"客人-3L04", hanzi:"客人", en:"customer; guest", ru:"гость; клиент", lesson:"3-L04", group:"L4" },
+    { id:"年级-3L04", hanzi:"年级", en:"grade (school year)", ru:"класс; курс", lesson:"3-L04", group:"L4" },
+    { id:"年轻-3L04", hanzi:"年轻", en:"young", ru:"молодой", lesson:"3-L04", group:"L4" },
+    { id:"努力-3L04", hanzi:"努力", en:"hard-working; try hard", ru:"стараться; прилежный", lesson:"3-L04", group:"L4" },
+    { id:"热情-3L04", hanzi:"热情", en:"warm; enthusiastic", ru:"тёплый; доброжелательный; энтузиастичный", lesson:"3-L04", group:"L4" },
+    { id:"认真-3L04", hanzi:"认真", en:"serious; earnest", ru:"серьёзный; добросовестный", lesson:"3-L04", group:"L4" },
+    { id:"又-3L04", hanzi:"又", en:"again; and", ru:"снова; опять; и", lesson:"3-L04", group:"L4" },
+    { id:"站-3L04", hanzi:"站", en:"to stand; station", ru:"стоять; станция", lesson:"3-L04", group:"L4" },
+    { id:"照片-3L04", hanzi:"照片", en:"photo", ru:"фотография", lesson:"3-L04", group:"L4" },
+    { id:"总是-3L04", hanzi:"总是", en:"always", ru:"всегда", lesson:"3-L04", group:"L4" },
+  ];
+
+  const STORAGE_KEY = "hsk3_l3l4_progress_v1";
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const shuffle = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  /********************
+   * SPEECH
+   ********************/
+  function useVoices() {
+    const [voices, setVoices] = useState([]);
+    useEffect(() => {
+      function load() {
+        const v = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+        setVoices(v || []);
+      }
+      load();
+      if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = load;
+      }
+    }, []);
+    return voices;
+  }
+  function speak(text, langPref = "zh-CN", rate = 1) {
+    if (!("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis;
+    const utter = new SpeechSynthesisUtterance(text);
+    const voices = synth.getVoices();
+    const pick = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langPref.toLowerCase()));
+    if (pick) utter.voice = pick;
+    utter.lang = pick?.lang || langPref;
+    utter.rate = rate;
+    synth.speak(utter);
+  }
+  // Speak Chinese then English then Russian (if available)
+  function speakWord(word) {
+    speak(word.hanzi, "zh-CN", 0.95);
+    setTimeout(() => speak(word.en, "en-US", 1), 400);
+    setTimeout(() => speak(word.ru, "ru-RU", 1), 900);
+  }
+
+  /********************
+   * STORAGE HOOK
+   ********************/
+  function useProgress(words) {
+    const [progress, setProgress] = useState(() => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch(e){}
+      const init = {};
+      words.forEach(w => init[w.id] = 0);
+      return init;
+    });
+
+    useEffect(() => {
+      // ensure new words appear with defaults
+      const withAll = {...progress};
+      words.forEach(w => {
+        if (!(w.id in withAll)) withAll[w.id] = 0;
+      });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(withAll));
+    }, [progress, words]);
+
+    const setLevel = (id, level) => {
+      setProgress(p => ({...p, [id]: clamp(level, 0, 5)}));
+    };
+    const adjust = (id, delta) => {
+      setProgress(p => ({...p, [id]: clamp((p[id] ?? 0) + delta, 0, 5)}));
+    };
+    const reset = () => {
+      const base = {};
+      words.forEach(w => base[w.id] = 0);
+      setProgress(base);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(base));
+    }
+    return {progress, setLevel, adjust, reset};
+  }
+
+  /********************
+   * UI HELPERS
+   ********************/
+  const Badge = ({level}) => (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+      ${level>=4 ? "bg-emerald-100 text-emerald-700" :
+        level>=2 ? "bg-amber-100 text-amber-700" :
+                   "bg-slate-100 text-slate-600"}`}>
+      LV {level}
+    </span>
+  );
+
+  const TopBar = ({stats, onReset}) => (
+    <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+      <div className="flex items-center gap-3">
+        <div className="text-xl md:text-2xl font-bold">HSK3 L3&L4 Character Trainer</div>
+        <div className="hidden md:block text-slate-500">Flashcards · Quiz · Type-It · Memory Match</div>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="text-sm">
+          <span className="font-semibold">{stats.mastered}</span>/<span>{stats.total}</span> mastered
+          <span className="ml-2 text-slate-500">({stats.percent}%)</span>
+        </div>
+        <button className="text-sm px-3 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50"
+                onClick={onReset} title="Clear all saved progress">Reset</button>
+      </div>
+    </div>
+  );
+
+  /********************
+   * FILTER BAR
+   ********************/
+  function FilterBar({subset, setSubset, search, setSearch}) {
+    return (
+      <div className="flex flex-col md:flex-row gap-3 md:items-end mt-4">
+        <div>
+          <label className="block text-xs uppercase tracking-wide text-slate-500 mb-1">Subset</label>
+          <select
+            className="px-3 py-2 rounded-xl bg-white border border-slate-200"
+            value={subset} onChange={e => setSubset(e.target.value)}>
+            <option value="ALL">All</option>
+            <option value="L3">Only L3</option>
+            <option value="L4">Only L4</option>
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs uppercase tracking-wide text-slate-500 mb-1">Search</label>
+          <input className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200"
+                 placeholder="Search Chinese / English / Russian"
+                 value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+      </div>
+    );
+  }
+
+  /********************
+   * FLASHCARDS
+   ********************/
+  function Flashcards({words, progress, adjust}) {
+    const [idx, setIdx] = useState(0);
+    const [flipped, setFlipped] = useState(false);
+    const cur = words[idx];
+
+    useEffect(() => {
+      const onKey = (e) => {
+        const tag = (e.target.tagName || "").toLowerCase();
+        const typing = tag === "input" || tag === "textarea";
+        if (typing) return;
+
+        if (e.code === "Space") { e.preventDefault(); setFlipped(f => !f);}
+        if (e.key.toLowerCase() === "k") { e.preventDefault(); handleKnew(); }
+        if (e.key.toLowerCase() === "a") { e.preventDefault(); handleAgain(); }
+        if (e.key.toLowerCase() === "v") { e.preventDefault(); speakWord(cur); }
+        if (e.key === "ArrowRight") next();
+        if (e.key === "ArrowLeft") prev();
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, [idx, cur]);
+
+    useEffect(() => { setFlipped(false); }, [idx]);
+
+    const next = () => setIdx(i => (i + 1) % words.length);
+    const prev = () => setIdx(i => (i - 1 + words.length) % words.length);
+    const handleKnew = () => { adjust(cur.id, +1); next(); };
+    const handleAgain = () => { adjust(cur.id, -1); next(); };
+
+    return (
+      <div className="mt-4 grid md:grid-cols-[1.2fr,1fr] gap-6 items-start">
+        <div className="card">
+          <div className={`flip ${flipped ? "flipped" : ""}`}>
+            <div className="face front bg-white rounded-2xl shadow-sm border border-slate-200 p-8 min-h-[220px] flex items-center justify-center">
+              <div className="text-6xl md:text-7xl font-semibold tracking-wide">{cur.hanzi}</div>
+            </div>
+            <div className="face back bg-white rounded-2xl shadow-sm border border-slate-200 p-8 min-h-[220px] flex items-center justify-center absolute inset-0">
+              <div className="text-center">
+                <div className="text-xl font-semibold">{cur.en}</div>
+                <div className="text-slate-600 mt-1">{cur.ru}</div>
+                <div className="mt-3">
+                  <Badge level={progress[cur.id] ?? 0} /> <span className="text-xs text-slate-500 ml-2">{cur.lesson}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <div className="font-semibold mb-2">Controls</div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <button onClick={()=>setFlipped(f=>!f)} className="px-3 py-2 rounded-xl border bg-slate-50 hover:bg-slate-100">Space · Flip</button>
+              <button onClick={()=>speakWord(cur)} className="px-3 py-2 rounded-xl border bg-slate-50 hover:bg-slate-100">V · Voice</button>
+              <button onClick={handleKnew} className="px-3 py-2 rounded-xl border bg-emerald-50 hover:bg-emerald-100">K · Knew (+1)</button>
+              <button onClick={handleAgain} className="px-3 py-2 rounded-xl border bg-amber-50 hover:bg-amber-100">A · Again (−1)</button>
+            </div>
+            <div className="flex items-center justify-between mt-4">
+              <button onClick={prev} className="px-3 py-2 rounded-xl border">← Prev</button>
+              <div className="text-sm text-slate-500">{idx+1} / {words.length}</div>
+              <button onClick={next} className="px-3 py-2 rounded-xl border">Next →</button>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-slate-500">
+            Tip: Use <kbd>Space</kbd> to flip, <kbd>K</kbd>/<kbd>A</kbd> to mark, <kbd>V</kbd> for voice, ←/→ to navigate.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /********************
+   * QUIZ (multiple choice)
+   ********************/
+  function Quiz({words, progress, adjust}) {
+    const [q, setQ] = useState(() => makeQuestion(words));
+    const [picked, setPicked] = useState(null);
+    function makeQuestion(pool) {
+      const word = pool[Math.floor(Math.random()*pool.length)];
+      const opts = shuffle([
+        word.en,
+        ...shuffle(pool.filter(w=>w.id!==word.id)).slice(0,3).map(w=>w.en)
+      ]);
+      return {word, opts};
+    }
+    const select = (opt) => {
+      if (picked) return;
+      setPicked(opt);
+      if (opt === q.word.en) {
+        adjust(q.word.id, +1);
+        speakWord(q.word);
+      } else {
+        adjust(q.word.id, -1);
+      }
+    }
+    const next = () => {
+      setPicked(null);
+      setQ(makeQuestion(words));
+    }
+    return (
+      <div className="mt-4 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div className="text-center">
+          <div className="text-5xl md:text-6xl font-semibold">{q.word.hanzi}</div>
+          <div className="mt-2 text-sm text-slate-500">{q.word.lesson} · <Badge level={progress[q.word.id] ?? 0} /></div>
+        </div>
+        <div className="grid md:grid-cols-2 gap-3 mt-6">
+          {q.opts.map(opt=> {
+            const isCorrect = picked && opt === q.word.en;
+            const isWrong = picked && opt === picked && picked !== q.word.en;
+            return (
+              <button key={opt} onClick={()=>select(opt)}
+                className={`px-4 py-3 rounded-xl border text-left
+                 ${picked ? (isCorrect ? "bg-emerald-50 border-emerald-300" : isWrong ? "bg-rose-50 border-rose-300":"opacity-70") :
+                 "bg-slate-50 hover:bg-slate-100"}`}>
+                {opt}
+              </button>
+            )
+          })}
+        </div>
+        <div className="mt-4 flex items-center justify-between">
+          <button onClick={()=>speakWord(q.word)} className="px-3 py-2 rounded-xl border bg-slate-50 hover:bg-slate-100">🔊 Hear it</button>
+          <button onClick={next} className="px-3 py-2 rounded-xl border bg-white hover:bg-slate-50">Next</button>
+        </div>
+      </div>
+    );
+  }
+
+  /********************
+   * TYPE-IT
+   ********************/
+  function TypeIt({words, adjust}) {
+    const [q, setQ] = useState(()=> words[Math.floor(Math.random()*words.length)]);
+    const [ans, setAns] = useState("");
+    const [status, setStatus] = useState(null);
+    const check = () => {
+      const ok = ans.trim() === q.hanzi;
+      setStatus(ok ? "ok" : "no");
+      adjust(q.id, ok ? +1 : -1);
+      if (ok) speakWord(q);
+    };
+    const next = () => {
+      setStatus(null); setAns("");
+      setQ(words[Math.floor(Math.random()*words.length)]);
+    };
+    const hint = () => {
+      if (!q.hanzi) return;
+      setAns(q.hanzi[0] + (ans.length>1?ans.slice(1):""));
+    }
+    return (
+      <div className="mt-4 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div className="text-sm text-slate-500">Type the Chinese characters for:</div>
+        <div className="text-2xl font-semibold">{q.en}</div>
+        <div className="text-slate-600">{q.ru}</div>
+        <input className="mt-4 w-full px-3 py-2 rounded-xl border"
+               placeholder="请输入汉字…" value={ans} onChange={e=>setAns(e.target.value)} />
+        <div className="mt-3 flex items-center gap-2">
+          <button onClick={check} className="px-4 py-2 rounded-xl border bg-emerald-50 hover:bg-emerald-100">Check</button>
+          <button onClick={next} className="px-4 py-2 rounded-xl border">Skip / Next</button>
+          <button onClick={hint} className="px-4 py-2 rounded-xl border bg-slate-50">Hint 1st char</button>
+          <button onClick={()=>speak(q.en,"en-US")} className="px-3 py-2 rounded-xl border">🔊 EN</button>
+          <button onClick={()=>speak(q.ru,"ru-RU")} className="px-3 py-2 rounded-xl border">🔊 RU</button>
+        </div>
+        {status && (
+          <div className={`mt-3 px-3 py-2 rounded-xl ${status==="ok"?"bg-emerald-50 text-emerald-700":"bg-rose-50 text-rose-700"}`}>
+            {status==="ok" ? "✅ Correct!" : `❌ Not yet. Correct: ${q.hanzi}`}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /********************
+   * MINI-GAME: MEMORY MATCH (hanzi ↔ english)
+   ********************/
+  function MemoryMatch({words, adjust}) {
+    const sample = useMemo(() => shuffle(words).slice(0, 8), [words]);
+    const deck = useMemo(() => {
+      const pairs = sample.flatMap(w => ([
+        { key: w.id+"-cn", id: w.id, display: w.hanzi, type:"cn", w },
+        { key: w.id+"-en", id: w.id, display: w.en, type:"en", w },
+      ]));
+      return shuffle(pairs);
+    }, [sample]);
+    const [opened, setOpened] = useState([]);
+    const [matched, setMatched] = useState({});
+    const [pop, setPop] = useState(null);
+
+    const click = (card) => {
+      if (matched[card.key]) return;
+      if (opened.find(o=>o.key===card.key)) return;
+      const next = [...opened, card];
+      setOpened(next);
+      if (next.length === 2) {
+        const [a,b] = next;
+        if (a.id === b.id && a.type !== b.type) {
+          // match!
+          setTimeout(() => {
+            setMatched(m => ({...m, [a.key]: true, [b.key]: true}));
+            setOpened([]);
+            adjust(a.id, +1);
+            speakWord(a.w);
+            setPop(a.w);
+            setTimeout(()=> setPop(null), 1000);
+          }, 450);
+        } else {
+          setTimeout(()=> setOpened([]), 650);
+        }
+      } else if (next.length > 2) {
+        setOpened([card]);
+      }
+    };
+
+    const done = Object.keys(matched).length === deck.length;
+
+    return (
+      <div className="mt-4">
+        <div className="mb-3 text-sm text-slate-600">Find Hanzi ↔ English pairs. Successful matches boost mastery and speak the word.</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {deck.map(card => {
+            const isOpen = opened.find(o=>o.key===card.key) || matched[card.key];
+            return (
+              <button key={card.key} onClick={()=>click(card)}
+                className={`h-24 md:h-28 rounded-2xl border text-center px-2
+                 ${isOpen ? "bg-white border-emerald-300 pulse":"bg-slate-50 hover:bg-slate-100 border-slate-200"}`}>
+                <div className={`text-lg md:text-xl ${isOpen?"":"opacity-0"}`}>{card.display}</div>
+              </button>
+            );
+          })}
+        </div>
+        {done && (
+          <div className="mt-4 px-4 py-3 rounded-xl bg-emerald-50 text-emerald-800">🎉 Great job! All pairs found. Refresh to play again.</div>
+        )}
+        {pop && (
+          <div className="fixed bottom-4 right-4 px-3 py-2 rounded-xl bg-white shadow border">{pop.hanzi} · {pop.en}</div>
+        )}
+      </div>
+    );
+  }
+
+  /********************
+   * STATS
+   ********************/
+  function Stats({words, progress}) {
+    const levels = [0,1,2,3,4,5];
+    const counts = levels.map(l => words.filter(w => (progress[w.id] ?? 0) === l).length);
+    const mastered = words.filter(w => (progress[w.id] ?? 0) >= 4).length;
+    const total = words.length;
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+        <div className="font-semibold mb-2">Progress</div>
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+          {levels.map((l,i)=>(
+            <div key={l} className="p-3 rounded-xl bg-slate-50 border">
+              <div className="text-xs text-slate-500">Level {l}</div>
+              <div className="text-xl font-semibold">{counts[i]}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-sm text-slate-600">Mastered (≥4): <span className="font-semibold">{mastered}</span> / {total} ({Math.round(mastered/total*100)}%)</div>
+      </div>
+    );
+  }
+
+  /********************
+   * WORDLIST TABLE
+   ********************/
+  function WordTable({words, progress}) {
+    return (
+      <div className="mt-6 bg-white rounded-2xl shadow-sm border border-slate-200">
+        <div className="p-4 font-semibold">Wordlist (reference)</div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-slate-600">
+              <tr>
+                <th className="text-left p-3">汉字</th>
+                <th className="text-left p-3">English</th>
+                <th className="text-left p-3">Russian</th>
+                <th className="text-left p-3">Lesson</th>
+                <th className="text-left p-3">Mastery</th>
+              </tr>
+            </thead>
+            <tbody>
+              {words.map(w => (
+                <tr key={w.id} className="border-t">
+                  <td className="p-3 font-medium text-lg">{w.hanzi}</td>
+                  <td className="p-3">{w.en}</td>
+                  <td className="p-3">{w.ru}</td>
+                  <td className="p-3 text-slate-500">{w.lesson}</td>
+                  <td className="p-3"><Badge level={progress[w.id] ?? 0} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  /********************
+   * APP
+   ********************/
+  function App() {
+    const {progress, setLevel, adjust, reset} = useProgress(WORDS);
+    const [subset, setSubset] = useState("ALL");
+    const [search, setSearch] = useState("");
+    const [tab, setTab] = useState("flash");
+
+    const filtered = useMemo(() => {
+      const q = search.trim().toLowerCase();
+      return WORDS.filter(w => (subset==="ALL" || w.group === subset) &&
+        (!q || w.hanzi.includes(q) || w.en.toLowerCase().includes(q) || (w.ru||"").toLowerCase().includes(q)));
+    }, [subset, search]);
+
+    const stats = useMemo(() => {
+      const mastered = filtered.filter(w => (progress[w.id] ?? 0) >= 4).length;
+      const total = filtered.length;
+      return { mastered, total, percent: total ? Math.round(mastered/total*100) : 0 };
+    }, [filtered, progress]);
+
+    useVoices(); // just to warm up and list voices (improves first speak)
+
+    return (
+      <div className="space-y-5">
+        <TopBar stats={stats} onReset={reset} />
+        <FilterBar subset={subset} setSubset={setSubset} search={search} setSearch={setSearch} />
+
+        <div className="mt-2">
+          <div className="flex gap-2">
+            {[
+              {key:"flash",label:"Flashcards"},
+              {key:"quiz",label:"Quiz"},
+              {key:"type",label:"Type-It"},
+              {key:"game",label:"Memory Match"},
+              {key:"stats",label:"Stats"},
+            ].map(t => (
+              <button key={t.key} onClick={()=>setTab(t.key)}
+                className={`px-3 py-2 rounded-xl border text-sm ${tab===t.key?"bg-white shadow-sm":"bg-slate-50 hover:bg-slate-100"}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {filtered.length === 0 && (
+            <div className="mt-4 p-4 rounded-xl bg-amber-50 border text-amber-800">No words match your filter.</div>
+          )}
+
+          {filtered.length>0 && tab==="flash" && <Flashcards words={filtered} progress={progress} adjust={adjust} />}
+          {filtered.length>0 && tab==="quiz" && <Quiz words={filtered} progress={progress} adjust={adjust} />}
+          {filtered.length>0 && tab==="type" && <TypeIt words={filtered} adjust={adjust} />}
+          {filtered.length>0 && tab==="game" && <MemoryMatch words={filtered} adjust={adjust} />}
+          {tab==="stats" && <Stats words={filtered} progress={progress} />}
+
+          <WordTable words={filtered} progress={progress} />
+          <div className="text-[11px] text-slate-500 mt-3">
+            Voice uses your browser’s Speech Synthesis API. If Chinese/English/Russian voices don’t play at first load,
+            try pressing 🔊 again after a second or install voices in your OS.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
