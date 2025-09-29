@@ -4,11 +4,15 @@
   <meta charset="UTF-8" />
   <title>HSK3 · L3 & L4 — Character Trainer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Theme / preview / favicon (optional favicon.png in repo root) -->
+  <link rel="icon" href="favicon.png">
+  <meta name="theme-color" content="#a4d7e1">
+  <meta property="og:title" content="HSK3 · L3&L4 Character Trainer">
+  <meta property="og:description" content="Flashcards, quiz, typing, memory game with progress tracking.">
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html, body { height: 100%; }
-    /* playful but adult-friendly */
     .bg-candy { background: radial-gradient(1200px 600px at 0% 0%, #fdf2f8 0%, transparent 60%),
                          radial-gradient(1200px 600px at 100% 0%, #ecfeff 0%, transparent 60%),
                          radial-gradient(1200px 900px at 50% 100%, #f0fdf4 0%, transparent 60%);}
@@ -35,9 +39,7 @@
   /********************
    * DATA
    ********************/
-  // Level group & lesson tags included for filtering.
   const WORDS = [
-    // L3-L02/L3-L03
     { id:"腿-3L02", hanzi:"腿", en:"leg", ru:"нога", lesson:"3-L02", group:"L3" },
     { id:"衬衫-3L03", hanzi:"衬衫", en:"shirt", ru:"рубашка", lesson:"3-L03", group:"L3" },
     { id:"放-3L03", hanzi:"放", en:"to put; to place", ru:"класть; ставить; помещать", lesson:"3-L03", group:"L3" },
@@ -56,7 +58,6 @@
     { id:"饮料-3L03", hanzi:"饮料", en:"drink; beverage", ru:"напиток", lesson:"3-L03", group:"L3" },
     { id:"元-3L03", hanzi:"元", en:"yuan (unit of money)", ru:"юань (валюта)", lesson:"3-L03", group:"L3" },
     { id:"只-3L03", hanzi:"只", en:"only; merely", ru:"только; лишь", lesson:"3-L03", group:"L3" },
-    // L4-words
     { id:"比赛-3L04", hanzi:"比赛", en:"match; competition", ru:"соревнование; матч", lesson:"3-L04", group:"L4" },
     { id:"超市-3L04", hanzi:"超市", en:"supermarket", ru:"супермаркет", lesson:"3-L04", group:"L4" },
     { id:"聪明-3L04", hanzi:"聪明", en:"clever; smart", ru:"умный", lesson:"3-L04", group:"L4" },
@@ -77,15 +78,9 @@
   ];
 
   const STORAGE_KEY = "hsk3_l3l4_progress_v1";
+  const UI_KEY = "hsk3_ui_v1";
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-  const shuffle = (arr) => {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  };
+  const shuffle = (arr) => { const a=arr.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; };
 
   /********************
    * SPEECH
@@ -98,70 +93,70 @@
         setVoices(v || []);
       }
       load();
-      if (window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = load;
-      }
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = load;
     }, []);
     return voices;
   }
   function speak(text, langPref = "zh-CN", rate = 1) {
-    if (!("speechSynthesis" in window)) return;
+    if (!("speechSynthesis" in window) || !text) return;
     const synth = window.speechSynthesis;
-    const utter = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(text);
     const voices = synth.getVoices();
-    const pick = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langPref.toLowerCase()));
-    if (pick) utter.voice = pick;
-    utter.lang = pick?.lang || langPref;
-    utter.rate = rate;
-    synth.speak(utter);
+    const pick = voices.find(v => v.lang?.toLowerCase().startsWith(langPref.toLowerCase()));
+    if (pick) u.voice = pick;
+    u.lang = pick?.lang || langPref;
+    u.rate = rate;
+    synth.speak(u);
   }
-  // Speak Chinese then English then Russian (if available)
-  function speakWord(word) {
-    speak(word.hanzi, "zh-CN", 0.95);
-    setTimeout(() => speak(word.en, "en-US", 1), 400);
-    setTimeout(() => speak(word.ru, "ru-RU", 1), 900);
+  function speakWord(word, zhRate=0.95){
+    speak(word.hanzi, "zh-CN", zhRate);
+    setTimeout(()=>speak(word.en,"en-US",1), 400);
+    setTimeout(()=>speak(word.ru,"ru-RU",1), 900);
   }
 
   /********************
-   * STORAGE HOOK
+   * STORAGE HOOKS
    ********************/
   function useProgress(words) {
     const [progress, setProgress] = useState(() => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) return JSON.parse(raw);
-      } catch(e){}
-      const init = {};
-      words.forEach(w => init[w.id] = 0);
-      return init;
+      try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch(e){}
+      const init={}; words.forEach(w=>init[w.id]=0); return init;
     });
-
     useEffect(() => {
-      // ensure new words appear with defaults
-      const withAll = {...progress};
-      words.forEach(w => {
-        if (!(w.id in withAll)) withAll[w.id] = 0;
-      });
+      const withAll = {...progress}; words.forEach(w=>{ if(!(w.id in withAll)) withAll[w.id]=0; });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(withAll));
     }, [progress, words]);
-
-    const setLevel = (id, level) => {
-      setProgress(p => ({...p, [id]: clamp(level, 0, 5)}));
+    const setLevel = (id, lvl)=> setProgress(p=>({...p,[id]:clamp(lvl,0,5)}));
+    const adjust = (id, d)=> setProgress(p=>({...p,[id]:clamp((p[id]??0)+d,0,5)}));
+    const reset = ()=>{
+      const base={}; words.forEach(w=>base[w.id]=0);
+      setProgress(base); localStorage.setItem(STORAGE_KEY, JSON.stringify(base));
     };
-    const adjust = (id, delta) => {
-      setProgress(p => ({...p, [id]: clamp((p[id] ?? 0) + delta, 0, 5)}));
-    };
-    const reset = () => {
-      const base = {};
-      words.forEach(w => base[w.id] = 0);
-      setProgress(base);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(base));
-    }
-    return {progress, setLevel, adjust, reset};
+    return {progress,setLevel,adjust,reset};
+  }
+  function useUI() {
+    const [ui, setUI] = useState(() => {
+      try { return JSON.parse(localStorage.getItem(UI_KEY)) || {tab:"flash", subset:"ALL", search:"", showPinyin:false}; }
+      catch { return {tab:"flash", subset:"ALL", search:"", showPinyin:false}; }
+    });
+    useEffect(()=> localStorage.setItem(UI_KEY, JSON.stringify(ui)), [ui]);
+    return [ui, setUI];
   }
 
   /********************
-   * UI HELPERS
+   * PINYIN (simple)
+   ********************/
+  const PINYIN_MAP = { 又:"yòu", 站:"zhàn", 绿:"lǜ" }; // extend anytime
+  function pinyinFor(hz){
+    if (PINYIN_MAP[hz]) return PINYIN_MAP[hz];
+    try {
+      const seg = new Intl.Segmenter("zh-Hans",{granularity:"grapheme"});
+      return [...seg.segment(hz)].map(s=>s.segment).join(" ");
+    } catch { return hz; }
+  }
+
+  /********************
+   * UI bits
    ********************/
   const Badge = ({level}) => (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
@@ -171,8 +166,7 @@
       LV {level}
     </span>
   );
-
-  const TopBar = ({stats, onReset}) => (
+  const TopBar = ({stats, onReset, onExport, onImport}) => (
     <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
       <div className="flex items-center gap-3">
         <div className="text-xl md:text-2xl font-bold">HSK3 L3&L4 Character Trainer</div>
@@ -183,23 +177,20 @@
           <span className="font-semibold">{stats.mastered}</span>/<span>{stats.total}</span> mastered
           <span className="ml-2 text-slate-500">({stats.percent}%)</span>
         </div>
-        <button className="text-sm px-3 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50"
-                onClick={onReset} title="Clear all saved progress">Reset</button>
+        <button className="text-sm px-3 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50" onClick={onExport}>Export</button>
+        <label className="text-sm px-3 py-1 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 cursor-pointer">
+          Import<input type="file" accept="application/json" className="hidden" onChange={onImport}/>
+        </label>
+        <button className="text-sm px-3 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50" onClick={onReset}>Reset</button>
       </div>
     </div>
   );
-
-  /********************
-   * FILTER BAR
-   ********************/
   function FilterBar({subset, setSubset, search, setSearch}) {
     return (
       <div className="flex flex-col md:flex-row gap-3 md:items-end mt-4">
         <div>
           <label className="block text-xs uppercase tracking-wide text-slate-500 mb-1">Subset</label>
-          <select
-            className="px-3 py-2 rounded-xl bg-white border border-slate-200"
-            value={subset} onChange={e => setSubset(e.target.value)}>
+          <select className="px-3 py-2 rounded-xl bg-white border border-slate-200" value={subset} onChange={e=>setSubset(e.target.value)}>
             <option value="ALL">All</option>
             <option value="L3">Only L3</option>
             <option value="L4">Only L4</option>
@@ -209,7 +200,7 @@
           <label className="block text-xs uppercase tracking-wide text-slate-500 mb-1">Search</label>
           <input className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200"
                  placeholder="Search Chinese / English / Russian"
-                 value={search} onChange={e => setSearch(e.target.value)} />
+                 value={search} onChange={e=>setSearch(e.target.value)} />
         </div>
       </div>
     );
@@ -218,7 +209,7 @@
   /********************
    * FLASHCARDS
    ********************/
-  function Flashcards({words, progress, adjust}) {
+  function Flashcards({words, progress, adjust, showPinyin}) {
     const [idx, setIdx] = useState(0);
     const [flipped, setFlipped] = useState(false);
     const cur = words[idx];
@@ -226,33 +217,34 @@
     useEffect(() => {
       const onKey = (e) => {
         const tag = (e.target.tagName || "").toLowerCase();
-        const typing = tag === "input" || tag === "textarea";
-        if (typing) return;
-
-        if (e.code === "Space") { e.preventDefault(); setFlipped(f => !f);}
-        if (e.key.toLowerCase() === "k") { e.preventDefault(); handleKnew(); }
-        if (e.key.toLowerCase() === "a") { e.preventDefault(); handleAgain(); }
-        if (e.key.toLowerCase() === "v") { e.preventDefault(); speakWord(cur); }
-        if (e.key === "ArrowRight") next();
-        if (e.key === "ArrowLeft") prev();
+        if (tag==="input"||tag==="textarea") return;
+        if (e.code==="Space") { e.preventDefault(); setFlipped(f=>!f); }
+        if (e.key.toLowerCase()==="k") { e.preventDefault(); handleKnew(); }
+        if (e.key.toLowerCase()==="a") { e.preventDefault(); handleAgain(); }
+        if (e.key.toLowerCase()==="v") { e.preventDefault(); speakWord(cur); }
+        if (e.key==="ArrowRight") next();
+        if (e.key==="ArrowLeft") prev();
       };
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
     }, [idx, cur]);
 
-    useEffect(() => { setFlipped(false); }, [idx]);
+    useEffect(()=> setFlipped(false), [idx]);
 
-    const next = () => setIdx(i => (i + 1) % words.length);
-    const prev = () => setIdx(i => (i - 1 + words.length) % words.length);
-    const handleKnew = () => { adjust(cur.id, +1); next(); };
-    const handleAgain = () => { adjust(cur.id, -1); next(); };
+    const next = ()=> setIdx(i => (i+1)%words.length);
+    const prev = ()=> setIdx(i => (i-1+words.length)%words.length);
+    const handleKnew = ()=> { adjust(cur.id,+1); next(); };
+    const handleAgain = ()=> { adjust(cur.id,-1); next(); };
 
     return (
       <div className="mt-4 grid md:grid-cols-[1.2fr,1fr] gap-6 items-start">
         <div className="card">
           <div className={`flip ${flipped ? "flipped" : ""}`}>
             <div className="face front bg-white rounded-2xl shadow-sm border border-slate-200 p-8 min-h-[220px] flex items-center justify-center">
-              <div className="text-6xl md:text-7xl font-semibold tracking-wide">{cur.hanzi}</div>
+              <div className="text-center">
+                <div className="text-6xl md:text-7xl font-semibold tracking-wide">{cur.hanzi}</div>
+                {showPinyin && <div className="mt-2 text-slate-500 text-lg">{pinyinFor(cur.hanzi)}</div>}
+              </div>
             </div>
             <div className="face back bg-white rounded-2xl shadow-sm border border-slate-200 p-8 min-h-[220px] flex items-center justify-center absolute inset-0">
               <div className="text-center">
@@ -272,6 +264,7 @@
             <div className="grid grid-cols-2 gap-2 text-sm">
               <button onClick={()=>setFlipped(f=>!f)} className="px-3 py-2 rounded-xl border bg-slate-50 hover:bg-slate-100">Space · Flip</button>
               <button onClick={()=>speakWord(cur)} className="px-3 py-2 rounded-xl border bg-slate-50 hover:bg-slate-100">V · Voice</button>
+              <button onClick={()=>speakWord(cur,0.8)} className="px-3 py-2 rounded-xl border bg-slate-50 hover:bg-slate-100">🕊️ Slow</button>
               <button onClick={handleKnew} className="px-3 py-2 rounded-xl border bg-emerald-50 hover:bg-emerald-100">K · Knew (+1)</button>
               <button onClick={handleAgain} className="px-3 py-2 rounded-xl border bg-amber-50 hover:bg-amber-100">A · Again (−1)</button>
             </div>
@@ -282,7 +275,7 @@
             </div>
           </div>
           <div className="mt-3 text-xs text-slate-500">
-            Tip: Use <kbd>Space</kbd> to flip, <kbd>K</kbd>/<kbd>A</kbd> to mark, <kbd>V</kbd> for voice, ←/→ to navigate.
+            Tip: <kbd>Space</kbd> flip, <kbd>K</kbd>/<kbd>A</kbd> mark, <kbd>V</kbd> voice, ←/→ navigate.
           </div>
         </div>
       </div>
@@ -290,33 +283,23 @@
   }
 
   /********************
-   * QUIZ (multiple choice)
+   * QUIZ
    ********************/
   function Quiz({words, progress, adjust}) {
     const [q, setQ] = useState(() => makeQuestion(words));
     const [picked, setPicked] = useState(null);
     function makeQuestion(pool) {
       const word = pool[Math.floor(Math.random()*pool.length)];
-      const opts = shuffle([
-        word.en,
-        ...shuffle(pool.filter(w=>w.id!==word.id)).slice(0,3).map(w=>w.en)
-      ]);
+      const opts = shuffle([word.en, ...shuffle(pool.filter(w=>w.id!==word.id)).slice(0,3).map(w=>w.en)]);
       return {word, opts};
     }
     const select = (opt) => {
       if (picked) return;
       setPicked(opt);
-      if (opt === q.word.en) {
-        adjust(q.word.id, +1);
-        speakWord(q.word);
-      } else {
-        adjust(q.word.id, -1);
-      }
+      if (opt === q.word.en) { adjust(q.word.id, +1); speakWord(q.word); }
+      else { adjust(q.word.id, -1); }
     }
-    const next = () => {
-      setPicked(null);
-      setQ(makeQuestion(words));
-    }
+    const next = () => { setPicked(null); setQ(makeQuestion(words)); }
     return (
       <div className="mt-4 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div className="text-center">
@@ -358,21 +341,14 @@
       adjust(q.id, ok ? +1 : -1);
       if (ok) speakWord(q);
     };
-    const next = () => {
-      setStatus(null); setAns("");
-      setQ(words[Math.floor(Math.random()*words.length)]);
-    };
-    const hint = () => {
-      if (!q.hanzi) return;
-      setAns(q.hanzi[0] + (ans.length>1?ans.slice(1):""));
-    }
+    const next = () => { setStatus(null); setAns(""); setQ(words[Math.floor(Math.random()*words.length)]); };
+    const hint = () => { if (!q.hanzi) return; setAns(q.hanzi[0] + (ans.length>1?ans.slice(1):"")); }
     return (
       <div className="mt-4 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div className="text-sm text-slate-500">Type the Chinese characters for:</div>
         <div className="text-2xl font-semibold">{q.en}</div>
         <div className="text-slate-600">{q.ru}</div>
-        <input className="mt-4 w-full px-3 py-2 rounded-xl border"
-               placeholder="请输入汉字…" value={ans} onChange={e=>setAns(e.target.value)} />
+        <input className="mt-4 w-full px-3 py-2 rounded-xl border" placeholder="请输入汉字…" value={ans} onChange={e=>setAns(e.target.value)} />
         <div className="mt-3 flex items-center gap-2">
           <button onClick={check} className="px-4 py-2 rounded-xl border bg-emerald-50 hover:bg-emerald-100">Check</button>
           <button onClick={next} className="px-4 py-2 rounded-xl border">Skip / Next</button>
@@ -390,7 +366,7 @@
   }
 
   /********************
-   * MINI-GAME: MEMORY MATCH (hanzi ↔ english)
+   * MINI-GAME: MEMORY MATCH
    ********************/
   function MemoryMatch({words, adjust}) {
     const sample = useMemo(() => shuffle(words).slice(0, 8), [words]);
@@ -413,14 +389,12 @@
       if (next.length === 2) {
         const [a,b] = next;
         if (a.id === b.id && a.type !== b.type) {
-          // match!
           setTimeout(() => {
             setMatched(m => ({...m, [a.key]: true, [b.key]: true}));
             setOpened([]);
             adjust(a.id, +1);
             speakWord(a.w);
-            setPop(a.w);
-            setTimeout(()=> setPop(null), 1000);
+            setPop(a.w); setTimeout(()=> setPop(null), 1000);
           }, 450);
         } else {
           setTimeout(()=> setOpened([]), 650);
@@ -447,18 +421,14 @@
             );
           })}
         </div>
-        {done && (
-          <div className="mt-4 px-4 py-3 rounded-xl bg-emerald-50 text-emerald-800">🎉 Great job! All pairs found. Refresh to play again.</div>
-        )}
-        {pop && (
-          <div className="fixed bottom-4 right-4 px-3 py-2 rounded-xl bg-white shadow border">{pop.hanzi} · {pop.en}</div>
-        )}
+        {done && <div className="mt-4 px-4 py-3 rounded-xl bg-emerald-50 text-emerald-800">🎉 Great job! All pairs found. Refresh to play again.</div>}
+        {pop && <div className="fixed bottom-4 right-4 px-3 py-2 rounded-xl bg-white shadow border">{pop.hanzi} · {pop.en}</div>}
       </div>
     );
   }
 
   /********************
-   * STATS
+   * STATS / WORDLIST
    ********************/
   function Stats({words, progress}) {
     const levels = [0,1,2,3,4,5];
@@ -480,10 +450,6 @@
       </div>
     );
   }
-
-  /********************
-   * WORDLIST TABLE
-   ********************/
   function WordTable({words, progress}) {
     return (
       <div className="mt-6 bg-white rounded-2xl shadow-sm border border-slate-200">
@@ -520,10 +486,9 @@
    * APP
    ********************/
   function App() {
-    const {progress, setLevel, adjust, reset} = useProgress(WORDS);
-    const [subset, setSubset] = useState("ALL");
-    const [search, setSearch] = useState("");
-    const [tab, setTab] = useState("flash");
+    const {progress, adjust, reset} = useProgress(WORDS);
+    const [ui, setUI] = useUI(); // {tab, subset, search, showPinyin}
+    const { tab, subset, search, showPinyin } = ui;
 
     const filtered = useMemo(() => {
       const q = search.trim().toLowerCase();
@@ -537,44 +502,67 @@
       return { mastered, total, percent: total ? Math.round(mastered/total*100) : 0 };
     }, [filtered, progress]);
 
-    useVoices(); // just to warm up and list voices (improves first speak)
+    useVoices(); // warm-up voices
+
+    // Export / Import handlers
+    const doExport = () => {
+      const blob = new Blob([localStorage.getItem(STORAGE_KEY)||"{}"], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "hsk3_progress.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+    const doImport = async (e) => {
+      const f = e.target.files?.[0]; if (!f) return;
+      const text = await f.text();
+      try { JSON.parse(text); localStorage.setItem(STORAGE_KEY, text); location.reload(); }
+      catch { alert("Invalid JSON file."); }
+    };
 
     return (
       <div className="space-y-5">
-        <TopBar stats={stats} onReset={reset} />
-        <FilterBar subset={subset} setSubset={setSubset} search={search} setSearch={setSearch} />
+        <TopBar stats={stats} onReset={reset} onExport={doExport} onImport={doImport} />
 
-        <div className="mt-2">
-          <div className="flex gap-2">
-            {[
-              {key:"flash",label:"Flashcards"},
-              {key:"quiz",label:"Quiz"},
-              {key:"type",label:"Type-It"},
-              {key:"game",label:"Memory Match"},
-              {key:"stats",label:"Stats"},
-            ].map(t => (
-              <button key={t.key} onClick={()=>setTab(t.key)}
-                className={`px-3 py-2 rounded-xl border text-sm ${tab===t.key?"bg-white shadow-sm":"bg-slate-50 hover:bg-slate-100"}`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex gap-2 mt-2">
+          {[
+            {key:"flash",label:"Flashcards"},
+            {key:"quiz",label:"Quiz"},
+            {key:"type",label:"Type-It"},
+            {key:"game",label:"Memory Match"},
+            {key:"stats",label:"Stats"},
+          ].map(t => (
+            <button key={t.key}
+              onClick={()=>setUI(s=>({...s, tab:t.key}))}
+              className={`px-3 py-2 rounded-xl border text-sm ${tab===t.key?"bg-white shadow-sm":"bg-slate-50 hover:bg-slate-100"}`}>
+              {t.label}
+            </button>
+          ))}
+          <button onClick={()=>setUI(s=>({...s, showPinyin:!s.showPinyin}))}
+                  className={`px-3 py-2 rounded-xl border text-sm ${showPinyin?"bg-white shadow-sm":"bg-slate-50 hover:bg-slate-100"}`}>
+            {showPinyin ? "Hide Pinyin" : "Show Pinyin"}
+          </button>
+        </div>
 
-          {filtered.length === 0 && (
-            <div className="mt-4 p-4 rounded-xl bg-amber-50 border text-amber-800">No words match your filter.</div>
-          )}
+        <FilterBar
+          subset={subset} setSubset={(v)=>setUI(s=>({...s, subset:v}))}
+          search={search} setSearch={(v)=>setUI(s=>({...s, search:v}))}
+        />
 
-          {filtered.length>0 && tab==="flash" && <Flashcards words={filtered} progress={progress} adjust={adjust} />}
-          {filtered.length>0 && tab==="quiz" && <Quiz words={filtered} progress={progress} adjust={adjust} />}
-          {filtered.length>0 && tab==="type" && <TypeIt words={filtered} adjust={adjust} />}
-          {filtered.length>0 && tab==="game" && <MemoryMatch words={filtered} adjust={adjust} />}
-          {tab==="stats" && <Stats words={filtered} progress={progress} />}
+        {filtered.length === 0 && (
+          <div className="mt-4 p-4 rounded-xl bg-amber-50 border text-amber-800">No words match your filter.</div>
+        )}
 
-          <WordTable words={filtered} progress={progress} />
-          <div className="text-[11px] text-slate-500 mt-3">
-            Voice uses your browser’s Speech Synthesis API. If Chinese/English/Russian voices don’t play at first load,
-            try pressing 🔊 again after a second or install voices in your OS.
-          </div>
+        {filtered.length>0 && tab==="flash" && <Flashcards words={filtered} progress={progress} adjust={adjust} showPinyin={showPinyin} />}
+        {filtered.length>0 && tab==="quiz" && <Quiz words={filtered} progress={progress} adjust={adjust} />}
+        {filtered.length>0 && tab==="type" && <TypeIt words={filtered} adjust={adjust} />}
+        {filtered.length>0 && tab==="game" && <MemoryMatch words={filtered} adjust={adjust} />}
+        {tab==="stats" && <Stats words={filtered} progress={progress} />}
+
+        <WordTable words={filtered} progress={progress} />
+        <div className="text-[11px] text-slate-500 mt-3">
+          Voice uses your browser’s Speech Synthesis API. If Chinese/English/Russian voices don’t play at first load,
+          try pressing 🔊 again after a second or install voices in your OS.
         </div>
       </div>
     );
